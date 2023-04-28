@@ -1,0 +1,17 @@
+[package]
+name = "whereami"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sys-info = "0.9.1"
+itertools = "0.10.3"
+colored = "2.0.0"
+
+[profile.release]
+strip = true # To remove unecessary symbols from binary
+opt-level = "s" # Optimize for binary size
+lto = true # Enabling link time optimization
+codegen-units = 1 # Disabling parallel processing
