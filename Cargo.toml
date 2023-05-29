@@ -9,6 +9,7 @@ edition = "2021"
 sys-info = "0.9.1"
 itertools = "0.10.3"
 colored = "2.0.0"
+anyhow = "1.0.71"
 
 [profile.release]
 strip = true # To remove unecessary symbols from binary

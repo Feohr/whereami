@@ -1,7 +1,18 @@
+use anyhow::{bail, Result};
+use colored::Colorize;
+use itertools::Itertools;
 use std::env::consts::ARCH;
 use sys_info;
-use itertools::Itertools;
-use colored::Colorize;
+
+macro_rules! arg_err_msg {
+    ($($arg:tt)* $(,)?) => {
+        bail!(
+            "Invalid option \'{}\'. Running \'whereami --help\' for more information.\n\n{}",
+            $($arg)*,
+            help_note().bright_white(),
+        )
+    };
+}
 
 // Get timeval in seconds
 fn get_timeval(tv_sec: f64, tv_usec: f64) -> f64 {
@@ -150,7 +161,7 @@ fn get_mem_info(mem_info: &sys_info::MemInfo) -> String {
         \t\tFree swap:\t{free_swp}\n\
         \n\
         \tBuffer:\t\t\t{buff}\n\
-        \tCache:\t\t\t{cache}",
+        \tCache:\t\t\t{cache}\n",
         ttl_ram = get_data_unit(mem_info.total),
         used_ram = get_data_unit(mem_info.total - mem_info.avail),
         avail_ram = get_data_unit(mem_info.avail),
@@ -204,7 +215,7 @@ fn help_note() -> String {
 }
 
 // Main function to get info
-fn get_sys_info() -> Result<(), sys_info::Error> {
+fn get_sys_info() -> Result<()> {
     let mut args: Vec<_> = std::env::args().collect();
     args.remove(0); // To remove the first argument which is itself
 
@@ -220,7 +231,7 @@ fn get_sys_info() -> Result<(), sys_info::Error> {
 
     // If there are arguments
     if args.len() <= 0 {
-        return Ok(println!(
+        return Ok(print!(
             "Architecture:\t\t\t{}\n\
             Boot time:\t\t\t{:.6?} seconds\n\
             CPU count:\t\t\t{}\n\
@@ -241,36 +252,72 @@ fn get_sys_info() -> Result<(), sys_info::Error> {
             os_release,
             release_notes,
             get_mem_info(&mem_info)
-        ))
+        ));
     }
 
     // To remove duplicate arguments
-    args = args.into_iter().unique().collect();
+    args = args.into_iter().unique().collect::<Vec<String>>();
     for arg in args {
         // options
-        match arg.as_str() {
-            "-d" | "--disk"          => print!("{}",    get_disk_info(&disk_info)),
-            "-r" | "--release-notes" => print!("{}",    release_notes),
-            "-m" | "--memory"        => println!("{}",  get_mem_info(&mem_info)),
-            "-h" | "--help"          => print!("{}",    help_note()),
-            _ => {
-                print!(
-                    "Invalid option \'{}\'\nrunning \'whereami --help\' \
-                    for more information\n\n{}",
-                    arg,
-                    help_note()
-                    );
-                break;
-            }
-        }
+        let trim_match = arg.trim_start_matches('-');
+
+        let arg_closure = match arg {
+            _ if arg.starts_with("--") => match_str_arg,
+            _ if arg.starts_with('-') => match_char_arg,
+            _ => bail!("Invalid argument {}", arg),
+        };
+
+        arg_closure(trim_match, &disk_info, &mem_info, &release_notes)?;
     }
 
     return Ok(());
 }
 
+fn match_char_arg(
+    arg: &str,
+    disk_info: &sys_info::DiskInfo,
+    mem_info: &sys_info::MemInfo,
+    release_notes: &String,
+) -> Result<()> {
+    let mut outputs = Vec::<String>::new();
+
+    for arg in arg.chars() {
+        let output = match arg {
+            'd' => format!("{}", get_disk_info(disk_info)),
+            'r' => format!("{}", release_notes),
+            'm' => format!("{}", get_mem_info(mem_info)),
+            'h' => format!("{}", help_note()),
+            _ => arg_err_msg!(arg),
+        };
+        outputs.push(output);
+    }
+
+    for output in outputs.into_iter().unique() {
+        print!("{}", output);
+    }
+
+    Ok(())
+}
+
+fn match_str_arg(
+    arg: &str,
+    disk_info: &sys_info::DiskInfo,
+    mem_info: &sys_info::MemInfo,
+    release_notes: &String,
+) -> Result<()> {
+    match arg {
+        "disk" => print!("{}", get_disk_info(disk_info)),
+        "release-notes" => print!("{}", release_notes),
+        "memory" => print!("{}", get_mem_info(mem_info)),
+        "help" => print!("{}", help_note()),
+        _ => arg_err_msg!(arg),
+    }
+    Ok(())
+}
+
 fn main() {
     match get_sys_info() {
         Ok(_) => (),
-        Err(err) => println!("{}", format!("\n\n\n{}", err).red().bold()),
+        Err(err) => print!("{}", format!("{}", err).red().bold()),
     }
 }
